@@ -24,7 +24,7 @@ skmoefs requires:
 - Scikit-Learn
 - Platypus
 
-In order to use the library, it is necessary to have the above dependencies installed.
+In order to use the library, it is necessary to have the above dependencies installed::
 
     pip install numpy, scipy, numba, matplotlib, scikit-learn, platypus-opt
 
@@ -38,14 +38,14 @@ You can check the latest sources with the command::
 Testing
 ~~~~~~~
 
-	You can run some tests by executing
+You can run some tests by executing::
 
 	python example.py
 
 Examples
 ~~~~~~~~
 
-The simplest example is shown below. 
+The simplest example is shown below::
 
 
 	from platypus.algorithms import *
