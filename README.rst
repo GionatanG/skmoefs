@@ -1,10 +1,11 @@
 .. -*- mode: rst -*-
 
-skmoefs
+SKMoefs
 ============
 
-scikit-learn is a Python module for machine learning specifically built for
-Multi-Objective Evolutionary Fuzzy Systems
+SKMoefs is a Python module for machine learning specifically built for
+Multi-Objective Evolutionary Fuzzy Systems. It takes inspiration by the Scikit-Learn principles and their classes 
+are all ScikitLearn's estimators. In addition, it builds upon Platypus, a library that deals with multi-objective algorithms.
 
 
 Installation
