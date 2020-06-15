@@ -19,7 +19,7 @@ def make_directory(path):
     try:
         os.stat(path)
     except:
-        os.mkdir(path)
+        os.makedirs(path)
 
 def test1():
     X, y, attributes, inputs, outputs = load_dataset('newthyroid')
@@ -62,7 +62,7 @@ def test3(dataset, alg, seed):
                                   divisions=divisions, variator=variator,
                                   initializer=initializer, moea_type=alg,
                                   objectives=['accuracy', 'trl'])
-        mpaes_rcs_fdt.fit(Xtr, ytr, max_evals=1000)
+        mpaes_rcs_fdt.fit(Xtr, ytr, max_evals=10000)
         store_object(mpaes_rcs_fdt, base)
     else:
         mpaes_rcs_fdt = load_object(base)
@@ -74,6 +74,6 @@ def test3(dataset, alg, seed):
 
 
 if __name__=="__main__":
-    test1()
-    test2()
-    test3('iris', 'nsga2', 2)
+    #test1()
+    #test2()
+    test3('iris', 'mpaes22', 2)

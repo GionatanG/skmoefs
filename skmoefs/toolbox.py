@@ -71,6 +71,7 @@ def load_dataset(name):
     outputs = []
     X = []
     y = []
+    os.listdir('dataset')
     with open('dataset/'+ name + '.dat', 'r') as f:
         line = f.readline()
         while line:
@@ -282,7 +283,6 @@ class MPAES_RCS(MOEL_FRBC):
         problem = self.problem
         objectives = problem.objectives
         values = np.zeros([archive_size, len(objectives), 2])
-        print(len(archive))
         for i in range(archive_size):
             classifier = problem.decode(archive[i])
             for j in range(len(objectives)):
@@ -296,14 +296,16 @@ class MPAES_RCS(MOEL_FRBC):
 
         trl_index = objectives.index('trl')
         other_obj = np.setdiff1d(np.arange(len(objectives)), trl_index)[0]
-        #coords = np.array(sorted(zip(values[:, trl_index, 0], values[:,other_obj, 0]), key=lambda t: t[0]))
+        coords = np.array(sorted(zip(values[:, trl_index, 0], values[:,other_obj, 0]), key=lambda t: (t[0], 100-t[1])))
+        _, indices = np.unique(coords[:, 0], return_index=True)
 
-        plt.plot(values[:, trl_index, 0], values[:, other_obj, 0], marker=marker, linestyle='dotted', markersize=11,
-                 label=label + '_train')
+        plt.plot(coords[indices, 0], coords[indices, 1], marker=marker, linestyle='dotted', markersize=11,
+                 label='train')
         if x is not None and y is not None:
-            coords = np.array(sorted(zip(values[:, trl_index, 1], values[:, other_obj, 1]), key=lambda t: t[0]))
-            plt.plot(coords[:, 0], coords[:, 1], marker=marker, linestyle='dotted', markersize=11,
-                     label=label + '_test')
+            coords = np.array(sorted(zip(values[:, trl_index, 1], values[:, other_obj, 1]), key=lambda t: (t[0], 100-t[1])))
+            _, indices = np.unique(coords[:, 0], return_index=True)
+            plt.plot(coords[indices, 0], coords[indices, 1], marker=marker, linestyle='dotted', markersize=11,
+                     label='test')
 
 
     def show_pareto(self, x=None, y=None, path=''):

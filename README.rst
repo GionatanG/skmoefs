@@ -47,7 +47,6 @@ Examples
 
 The simplest example is shown below::
 
-
 	from platypus.algorithms import *
 
 	from skmoefs.toolbox import MPAES_RCS, load_dataset, normalize
@@ -55,9 +54,8 @@ The simplest example is shown below::
 	from skmoefs.discretization.discretizer_base import fuzzyDiscretization
 	from sklearn.model_selection import train_test_split
 
-
 	X, y, attributes, inputs, outputs = load_dataset('iris')
-    X_n, y_n = normalize(X, y, attributes)
+	X_n, y_n = normalize(X, y, attributes)
     Xtr, Xte, ytr, yte = train_test_split(X_n, y_n, test_size=0.3)
 
     my_moefs = MPAES_RCS(variator=RCSVariator(), initializer=RCSInitializer())
