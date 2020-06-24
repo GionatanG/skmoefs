@@ -3,7 +3,7 @@
 @attribute Tobacco real [0.0, 31.2]
 @attribute Ldl real [0.98, 15.33]
 @attribute Adiposity real [6.74, 42.49]
-@attribute Famhist {1, 0}
+@attribute Famhist {0, 1}
 @attribute Typea integer [13, 78]
 @attribute Obesity real [14.7, 46.58]
 @attribute Alcohol real [0.0, 147.19]

@@ -78,8 +78,8 @@ def load_dataset(name):
             if line.startswith("@"):
                 txt = line.split()
                 if txt[0] == "@attribute":
-                    domain = re.search('((\[.+\])|(\{.+\}))$', line)
-                    attributes.append(eval(domain.group(1)))
+                    domain = re.search('(\[|\{)(.+)(\]|\})', line)
+                    attributes.append(eval('[' + domain.group(2) + ']'))
                 elif txt[0] == "@inputs":
                     for i in range(len(txt) - 1):
                         inputs.append(txt[i + 1].replace(',', ''))

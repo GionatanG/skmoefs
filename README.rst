@@ -56,14 +56,13 @@ The simplest example is shown below::
 
 	X, y, attributes, inputs, outputs = load_dataset('iris')
 	X_n, y_n = normalize(X, y, attributes)
-    Xtr, Xte, ytr, yte = train_test_split(X_n, y_n, test_size=0.3)
+	Xtr, Xte, ytr, yte = train_test_split(X_n, y_n, test_size=0.3)
+	my_moefs = MPAES_RCS(variator=RCSVariator(), initializer=RCSInitializer())
+	my_moefs.fit(Xtr, ytr, max_evals=10000)
 
-    my_moefs = MPAES_RCS(variator=RCSVariator(), initializer=RCSInitializer())
-    my_moefs.fit(Xtr, ytr, max_evals=10000)
-
-    my_moefs.show_pareto()
-    my_moefs.show_pareto(Xte, yte)
-    my_moefs.show_model('median', inputs=inputs, outputs=outputs)
+	my_moefs.show_pareto()
+	my_moefs.show_pareto(Xte, yte)
+	my_moefs.show_model('median', inputs=inputs, outputs=outputs)
 
 The program load the IRIS dataset from the built-in datasets and normalize the matrix X. Indeed, 
 the input data should be in the form 
@@ -74,4 +73,22 @@ the input data should be in the form
 After the normalization, the script splits the dataset into training and testing. 
 It defines and train an MPAES_RCS object with default parameters, variator and initializer. Finally, it shows the results by
 plotting the pareto for the training set, another pareto evaluated for the testing set, and RB/DB for the classifier with
-an accuracy that is the median among the values within the archive
+an accuracy that is the median among the values within the archive.
+
+Citation
+~~~~~~~~
+
+If you use SK-MOEFS in a scientific publication,
+we would appreciate citations to the following papers:
+
+1) Gallo G., Ferrari V., Marcelloni F., Ducange P. (2020) SK-MOEFS: A Library in Python for Designing Accurate and Explainable Fuzzy Models. In: Lesot MJ. et al. (eds) Information Processing and Management of Uncertainty in Knowledge-Based Systems. IPMU 2020. Communications in Computer and Information Science, vol 1239. Springer, Cham
+
+2) Antonelli, M., Ducange, P., Marcelloni, F.: A fast and efficient multi-objective evolutionary learning scheme for fuzzy rule-based classifiers. Inf. Sci. 283, 36\-54 (2014)
+
+License
+~~~~~~~
+
+SK-MOEFS is released under the GNU General Public License GPLv3 (See https://www.gnu.org/licenses/)
+
+
+
