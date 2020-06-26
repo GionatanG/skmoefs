@@ -1,9 +1,9 @@
 @relation bupa
-@attribute Mcv integer [65.0, 103]
-@attribute Alkphos integer [23.0, 138]
-@attribute Sgpt integer [4.0, 155]
-@attribute Sgot integer [5.0, 82]
-@attribute Gammagt integer [5.0, 297]
+@attribute Mcv integer [65, 103]
+@attribute Alkphos integer [23, 138]
+@attribute Sgpt integer [4, 155]
+@attribute Sgot integer [5, 82]
+@attribute Gammagt integer [5, 297]
 @attribute Drinks real [0.0, 20.0]
 @attribute Selector {1,2}
 @inputs Mcv, Alkphos, Sgpt, Sgot, Gammagt, Drinks

@@ -151,6 +151,9 @@ class RCSVariator(Variator):
         n_rules2 = len([v for v in child_copy2.variables[:2 * problem.M:2] if v != 0])
         roMax = min(n_rules1, n_rules2)
 
+        if n_rules1 < 2 and n_rules2 < 2:
+            return solution1, solution2
+
         crossover_point = random.randint(1, roMax - 1)
 
         for i in range(crossover_point):

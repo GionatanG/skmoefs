@@ -15,7 +15,7 @@ from multiprocessing import Pool, freeze_support
 
 import matplotlib.pyplot as plt
 from scipy.io import arff
-from skmoefs.toolbox import MPAES_RCS, load_dataset, normalize, is_object_present, store_object, load_object
+from skmoefs.toolbox import MPAES_RCS, load_dataset, normalize, is_object_present, store_object, load_object, milestones
 from skmoefs.rcs import RCSInitializer, RCSVariator
 from skmoefs.discretization.discretizer_base import fuzzyDiscretization
 from sklearn.model_selection import train_test_split
@@ -141,7 +141,7 @@ def test_crossval(dataset, alg, seed):
     initializer = RCSInitializer(discretizer=discretizer)
     mpaes_rcs_fdt = MPAES_RCS(M=M, Amin=Amin, capacity=capacity,
                              divisions=divisions, variator=variator, initializer=initializer)
-    mpaes_rcs_fdt.cross_val_score(X, y, num_fold=5, seed=seed,
+    return mpaes_rcs_fdt.cross_val_score(X, y, num_fold=5, seed=seed,
                                   filename=path + str(seed))
 
 
@@ -224,12 +224,69 @@ def test_dataset():
             df = pd.DataFrame(data, columns=columns)
             df.to_csv('results/d2/data.csv', mode='a', header=False)
 
+def parse_results():
+    datasets = ['appendicitis', 'bupa', 'glass', 'haberman',
+                'hayes-roth', 'iris', 'heart', 'newthyroid',
+                'pima', 'saheart', 'sonar', 'tae', 'vehicle', 'wine']
+    algs = ['mpaes22', 'nsga3', 'moead']
+    seeds = (np.arange(6) + 1)
+    measurements = ['Acc_tr', 'Acc_ts', 'TRL', 'NRules', 'Nsols', 'Precision', 'Recall', 'Fscore']
+    positions = ['first', 'median', 'last']
+    cols = ['alg', 'dataset'] + [t[0] + '_' + t[1] for t in itertools.product(measurements, positions)]
+    stats = {k: [] for k in cols}
+    for alg in algs:
+        for dataset in datasets:
+            data = {k: np.zeros(30) for k in cols}
+            for k in range(len(seeds)):
+
+                set_rng(seeds[k])
+                scores = test_crossval(dataset, alg, seeds[k])
+
+                for fold in range(5):
+                    for i, position in enumerate(positions):
+                        for j, meas in enumerate(measurements):
+                            data[meas + '_' + position][k*5 + fold] = scores[j, i, fold]
+            stats['alg'].append(alg)
+            stats['dataset'].append(dataset)
+            for k in cols:
+                if k != 'alg' and k != 'dataset':
+                    stats[k].append(np.mean(data[k]))
+    df = pd.DataFrame(stats, columns=cols)
+    df.to_csv('csv/stats.csv', mode='a', header=True)
+
+def parse_results_archives():
+    datasets = ['appendicitis']
+    algs = ['mpaes22']
+    seeds = (np.arange(6) + 1)
+    measurements = ['Acc_tr', 'Acc_ts', 'TRL', 'NRules', 'Nsols', 'Precision', 'Recall', 'Fscore']
+    positions = ['first', 'median', 'last']
+    cols = ['alg', 'dataset', 'milestone'] + [t[0] + '_' + t[1] for t in itertools.product(measurements, positions)]
+    stats = {k: [] for k in cols}
+    for alg in algs:
+        for dataset in datasets:
+            data = {k: np.full([len(milestones), 30], np.nan) for k in cols}
+            for k in range(len(seeds)):
+
+                set_rng(seeds[k])
+                scores, scores_archives = test_crossval(dataset, alg, seeds[k])
+
+                for s in range(len(scores_archives)):
+                    for fold in range(5):
+                        for i, position in enumerate(positions):
+                            for j, meas in enumerate(measurements):
+                                data[meas + '_' + position][s][k*5 + fold] = scores_archives[s][j, i, fold]
+            for s in range(8):
+                stats['alg'].append(alg)
+                stats['dataset'].append(dataset)
+                stats['milestone'].append(milestones[s])
+                for k in cols:
+                    if k != 'alg' and k != 'dataset' and k != 'milestone':
+                        stats[k].append(np.nanmean(data[k][s, :]))
+    df = pd.DataFrame(stats, columns=cols)
+    df.to_csv('csv/stats_archives.csv', mode='a', header=True)
 
 if __name__=="__main__":
     freeze_support()
     #test_multiple()
-    test_fit('saheart', 'mpaes22', 10)
-    #test_fit('iris', 'mpaes22', 10)
-    #test_dataset()
-    #test_time()
-    #test_crossval()
+    #parse_results()
+    parse_results_archives()
