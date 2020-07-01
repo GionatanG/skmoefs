@@ -1,23 +1,21 @@
-import numpy as np
-import os
-import time
 import copy
+import os
 import pickle
 import random
 import re
+
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.style
-import matplotlib as mpl
+import numpy as np
+from platypus import AdaptiveGridArchive, Problem
+from sklearn import metrics
+from sklearn.model_selection import KFold
 
-from platypus import AdaptiveGridArchive
-
+from skmoefs.moea import MOEAGenerator, RandomSelector, NSGAIIS, NSGAIIIS, GDE3S, SPEA2S, IBEAS, MOEADS, EpsMOEAS
 from skmoefs.moea import MPAES2_2
 from skmoefs.moel import MOEL_FRBC
 from skmoefs.rcs import RCSProblem, RCSVariator, RCSInitializer
-from skmoefs.moea import MOEAGenerator, RandomSelector, NSGAIIS, NSGAIIIS, GDE3S, SPEA2S, IBEAS, MOEADS, EpsMOEAS
-
-from sklearn.model_selection import KFold
-from sklearn import metrics
 
 milestones = [500, 1000, 2000, 5000, 10000, 20000, 30000, 40000, 50000, 75000, 100000]
 
@@ -203,20 +201,25 @@ class MPAES_RCS(MOEL_FRBC):
         return self
 
     def _sort_archive(self):
-        archive_size = len(self.archive)
-        for i in range(archive_size - 1):
-            max_index = i
-            for j in range(i + 1, archive_size):
-                acc_j = 1.0 - self.archive[j].objectives[0]
-                acc_max = 1.0 - self.archive[max_index].objectives[0]
-                if acc_j > acc_max:
-                    max_index = j
-            if max_index != i:
-                self.archive[max_index], self.archive[i] = self.archive[i], self.archive[max_index]
+        """
+            It sorts the archive according to the first objective (typically accuracy/auc)
+            from the best to the worst
+        """
+        isReversed = False
+        if self.problem.directions[0] == Problem.MAXIMIZE:
+            isReversed = True
+        values = [sol.objectives[0] for sol in self.archive]
+        indexes = sorted(values, key=lambda k: values[k], reverse=isReversed)
+        sorted_archive = []
+        for i in range(len(indexes)):
+            sorted_archive.append(self.archive[indexes[i]])
+        self.archive = sorted_archive
 
     def cross_val_score(self, X, y, num_fold=5, seed=0, filename=''):
-        n_sols = 3
-        n_stats = 8
+        sols = ['first', 'median', 'last']
+        stats = ['accTR', 'accTS', 'trl', 'nRules', 'precision', 'recall', 'fscore']
+        n_sols = len(sols)
+        n_stats = len(stats)
         np.random.seed(seed)
         random.seed(seed)
         if X.shape[0] != y.shape[0]:
@@ -230,16 +233,20 @@ class MPAES_RCS(MOEL_FRBC):
             X_train, X_test = X[train_index], X[test_index]
             y_train, y_test = y[train_index], y[test_index]
 
-            start = time.time()
+            # Store fold data if not already present, 
+            if not is_object_present(filename + 'data_fold' + str(i) + '_s' + str(seed)):
+                store_object((X_train, X_test, y_train, y_test), filename + 'data_fold' + str(i) + '_s' + str(seed))
+            else:
+                X_train, X_test, y_train, y_test = load_object(filename + 'data_fold' + str(i) + '_s' + str(seed))
+
+            # Train the MOEFS
             if not is_object_present(filename + '_fold' + str(i) + '_s' + str(seed)):
                 my_fold = self.fit(X_train, y_train, 50000)
                 store_object(self, filename + '_fold' + str(i) + '_s' + str(seed))
             else:
                 my_fold = load_object(filename + '_fold' + str(i) + '_s' + str(seed))
-            end = time.time()
 
             classifiers = my_fold.classifiers
-
             indexes = [0, int(len(classifiers) / 2), -1]
             snapshots = my_fold.algorithm.snapshots
             for j in range(len(snapshots)):
@@ -248,19 +255,18 @@ class MPAES_RCS(MOEL_FRBC):
                 archive_ind = [0, int(len(snapshot) / 2), -1]
                 res = sorted(range(len(snapshot)), key=lambda q: snapshot[q].objectives[0])
                 for k in range(n_sols):
-                    classifier = my_fold.problem.decode(snapshot[res[archive_ind[k]]])
-                    y_train_pred = classifier.predict(X_train)
+                    solution = snapshot[res[archive_ind[k]]]
+                    classifier = my_fold.problem.decode(solution)
                     y_test_pred = classifier.predict(X_test)
-                    scores_archives[j, 0, k, i] = (sum(y_train_pred == y_train) / len(y_train)) * 100.0
-                    scores_archives[j, 0, k, i] = (sum(y_test_pred == y_test) / len(y_test)) * 100.0
-                    scores_archives[j, 0, k, i] = classifier.trl()
-                    scores_archives[j, 0, k, i] = classifier.num_rules()
-                    scores_archives[j, 0, k, i] = len(classifiers)
+                    scores_archives[j, 0, k, i] = (solution.objectives[0]) * 100.0
+                    scores_archives[j, 1, k, i] = (sum(y_test_pred == y_test) / len(y_test)) * 100.0
+                    scores_archives[j, 2, k, i] = classifier.trl()
+                    scores_archives[j, 3, k, i] = classifier.num_rules()
                     prec, recall, fscore, _ = metrics.precision_recall_fscore_support(y_test_pred, y_test,
                                                                                       average='weighted')
-                    scores_archives[j, 0, k, i] = prec
-                    scores_archives[j, 0, k, i] = recall
-                    scores_archives[j, 0, k, i] = fscore
+                    scores_archives[j, 4, k, i] = prec
+                    scores_archives[j, 5, k, i] = recall
+                    scores_archives[j, 6, k, i] = fscore
             for k in range(n_sols):
                 classifier = classifiers[indexes[k]]
                 y_train_pred = classifier.predict(X_train)
@@ -269,12 +275,11 @@ class MPAES_RCS(MOEL_FRBC):
                 scores[1, k, i] = (sum(y_test_pred == y_test) / len(y_test)) * 100.0
                 scores[2, k, i] = classifier.trl()
                 scores[3, k, i] = classifier.num_rules()
-                scores[4, k, i] = len(classifiers)
                 prec, recall, fscore, _ = metrics.precision_recall_fscore_support(y_test_pred, y_test,
                                                                                   average='weighted')
-                scores[5, k, i] = prec
-                scores[6, k, i] = recall
-                scores[7, k, i] = fscore
+                scores[4, k, i] = prec
+                scores[5, k, i] = recall
+                scores[6, k, i] = fscore
 
         return scores, scores_archives
 
