@@ -1,14 +1,12 @@
 import copy
-
-from skmoefs.frbs import FuzzyRuleBasedClassifier, ClassificationRule
-from skmoefs.discretization.discretizer_base import fuzzyDiscretization
-from skmoefs import fmdt
-
 import random
-import numpy as np
 
+import numpy as np
 from platypus import Problem, Solution, Binary, Real, Variator
 
+from skmoefs import fmdt
+from skmoefs.discretization.discretizer_base import fuzzyDiscretization
+from skmoefs.frbs import FuzzyRuleBasedClassifier, ClassificationRule
 
 
 class RCSVariator(Variator):
@@ -29,7 +27,7 @@ class RCSVariator(Variator):
     # Remove duplicates from a solution
     def _remove_duplicates(self, solution):
         problem = solution.problem
-        rules = set(solution.variables[:2 * problem.M:2])
+        rules = set(solution.variables[:problem.crb_l:2])
         for i in range(problem.M - 1):
             if solution.variables[2 * i] not in rules:
                 solution.variables[2 * i] = 0
@@ -40,11 +38,12 @@ class RCSVariator(Variator):
 
     def _check_rules_constraints(self, solution):
         problem = solution.problem
-        rules = np.unique([v for v in solution.variables[:2 * problem.M:2] if v != 0])
+        crb_l = problem.crb_l
+        rules = np.unique((v for v in solution.variables[:crb_l:2] if v != 0))
         if len(rules) < problem.Mmin:
             return False
 
-        rules_indexes = [i for i, v in enumerate(solution.variables[:2 * problem.M:2]) if v != 0]
+        rules_indexes = (i for i, v in enumerate(solution.variables[:crb_l:2]) if v != 0)
         for i in rules_indexes:
             rule = problem.J[solution.variables[2 * i] - 1, :]
             n_antecedents = 0
@@ -106,40 +105,47 @@ class RCSVariator(Variator):
 
     def _db_crossover(self, solution1, solution2):
         problem = solution1.problem
+        crb_l = problem.crb_l
+        gran_l = problem.gran_l
+        g1 = solution1.variables[crb_l: crb_l + gran_l]
+        g2 = solution2.variables[crb_l: crb_l + gran_l]
         for i in range(problem.F):
-            base = 2 * problem.M + sum(problem.Bfs[:i])
-            for j in range(problem.Bfs[i]):
-                h1 = solution1.variables[base + j]
-                h2 = solution2.variables[base + j]
-                h_max = max(h1, h2)
-                h_min = min(h1, h2)
-                interval = h_max - h_min
-                if interval != 0.0:
-                    if j == 0:
-                        min_h1 = h1 / 2
-                        min_h2 = h2 / 2
-                    else:
-                        min_h1 = h1 - (h1 - solution1.variables[base + j - 1]) / 2
-                        min_h2 = h2 - (h2 - solution2.variables[base + j - 1]) / 2
+            # Crossover is possible ONLY if both solutions have the same granularity for the specific feature
+            if g1[i] == g2[i]:
+                base = crb_l + gran_l + (i * problem.TFmax)
+                # Make sure that we don't modify the extreme values of the domain interval
+                for j in range(1, g1[i] - 1):
+                    h1 = solution1.variables[base + j]
+                    h2 = solution2.variables[base + j]
+                    h_max = max(h1, h2)
+                    h_min = min(h1, h2)
+                    interval = h_max - h_min
+                    if interval != 0.0:
+                        if j == 0:
+                            min_h1 = h1 / 2
+                            min_h2 = h2 / 2
+                        else:
+                            min_h1 = h1 - (h1 - solution1.variables[base + j - 1]) / 2
+                            min_h2 = h2 - (h2 - solution2.variables[base + j - 1]) / 2
 
-                    if j == problem.Bfs[i] - 1:
-                        max_h1 = (1 + h1) / 2
-                        max_h2 = (1 + h2) / 2
-                    else:
-                        max_h1 = h1 + (solution1.variables[base + j + 1] - h1) / 2
-                        max_h2 = h2 + (solution2.variables[base + j + 1] - h2) / 2
+                        if j == g1[i] - 2:
+                            max_h1 = (1 + h1) / 2
+                            max_h2 = (1 + h2) / 2
+                        else:
+                            max_h1 = h1 + (solution1.variables[base + j + 1] - h1) / 2
+                            max_h2 = h2 + (solution2.variables[base + j + 1] - h2) / 2
 
-                    min_h1 = np.clip(min_h1, 0.0, 1.0)
-                    min_h2 = np.clip(min_h2, 0.0, 1.0)
+                        min_h1 = np.clip(min_h1, 0.0, 1.0)
+                        min_h2 = np.clip(min_h2, 0.0, 1.0)
 
-                    new_h1 = random.uniform(h_min - self.alpha * interval, h_max + self.alpha * interval)
-                    new_h2 = random.uniform(h_min - self.alpha * interval, h_max + self.alpha * interval)
+                        new_h1 = random.uniform(h_min - self.alpha * interval, h_max + self.alpha * interval)
+                        new_h2 = random.uniform(h_min - self.alpha * interval, h_max + self.alpha * interval)
 
-                    new_h1 = np.clip(new_h1, min_h1, max_h1)
-                    new_h2 = np.clip(new_h2, min_h2, max_h2)
+                        new_h1 = np.clip(new_h1, min_h1, max_h1)
+                        new_h2 = np.clip(new_h2, min_h2, max_h2)
 
-                    solution1.variables[base + j] = new_h1
-                    solution2.variables[base + j] = new_h2
+                        solution1.variables[base + j] = new_h1
+                        solution2.variables[base + j] = new_h2
         return solution1, solution2
 
     def _rb_crossover(self, solution1, solution2):
@@ -147,8 +153,9 @@ class RCSVariator(Variator):
         child_copy1 = copy.deepcopy(solution1)
         child_copy2 = copy.deepcopy(solution2)
 
-        n_rules1 = len([v for v in child_copy1.variables[:2 * problem.M:2] if v != 0])
-        n_rules2 = len([v for v in child_copy2.variables[:2 * problem.M:2] if v != 0])
+        crb_l = problem.crb_l
+        n_rules1 = len([v for v in child_copy1.variables[:crb_l:2] if v != 0])
+        n_rules2 = len([v for v in child_copy2.variables[:crb_l:2] if v != 0])
         roMax = min(n_rules1, n_rules2)
 
         if n_rules1 < 2 and n_rules2 < 2:
@@ -173,8 +180,9 @@ class RCSVariator(Variator):
 
     def _rb_flipflop_mutation(self, solution):
         problem = solution.problem
+        crb_l = problem.crb_l
         child_copy = copy.deepcopy(solution)
-        rule_i = random.choice([i for i, v in enumerate(solution.variables[:2 * problem.M:2]) if v != 0])
+        rule_i = random.choice([i for i, v in enumerate(solution.variables[:crb_l:2]) if v != 0])
         for j in (i for i, v in enumerate(problem.J[solution.variables[2 * rule_i] - 1, :-1]) if v != 0):
             if random.random() < self.p_cond:
                 value = child_copy.variables[2 * rule_i + 1][j]
@@ -185,14 +193,17 @@ class RCSVariator(Variator):
 
     def _db_random_mutation(self, solution):
         problem = solution.problem
+        crb_l = problem.crb_l
+        gran_l = problem.gran_l
         k = random.randint(0, problem.F - 1)
-        if problem.Bfs[k] > 0:
-            base = 2 * problem.M + sum(problem.Bfs[:k])
-            j = random.randint(0, problem.Bfs[k] - 1) + 1
-            domain = [0.0] + solution.variables[base:base + problem.Bfs[k]] + [1.0]
+        # Perform mutation only if granularity is 3 or more (at least one middle point)
+        if problem.G[k] > 2:
+            base = crb_l + gran_l + (k * problem.TFmax)
+            j = random.randint(1, problem.G[k] - 2)
+            domain = solution.variables[base: base + problem.G[k]]
             min_interval = domain[j] - (domain[j] - domain[j - 1]) / 2
             max_interval = domain[j] + (domain[j + 1] - domain[j]) / 2
-            solution.variables[base + j - 1] = random.uniform(min_interval, max_interval)
+            solution.variables[base + j] = random.uniform(min_interval, max_interval)
         return solution
 
     def evolve(self, parents):
@@ -274,25 +285,42 @@ class RCSInitializer:
 
 class RCSProblem(Problem):
 
-    def __init__(self, Amin, M, J, splits, objectives):
-
+    def __init__(self, Amin, M, J, splits, objectives, TFmax=7):
+        """
+        @param Amin: minimum number of antecedents per rule
+        @param M: maximum number of rules per individual
+        @param J: matrix representing the initial rulebase
+        @param splits: fuzzy partitions for input features
+        @param objectives: array of objectives (2 or more). The first one is typically expresses the performance
+                        for predictions. Indeed, the solutions will be sorted according to this objective (best-to-worst)
+        @param TFmax: maximum number of fuzzy sets per feature (i.e. maximum granularity)
+        """
         self.Amin = Amin
         self.M = M
         self.Mmax = J.shape[0]
         self.Mmin = len(set(J[:, -1]))
         self.M = np.clip(self.M, self.Mmin, self.Mmax)
         self.F = J.shape[1] - 1
+        self.TFmax = TFmax
 
         self.J = J
         self.initialBfs = splits
         self.G = np.array([len(split) for split in splits])
-        self.Bfs = self.G - 2
 
         self.objectives = objectives
-        super(RCSProblem, self).__init__(2 * self.M + sum(self.Bfs), len(objectives))
-        self.types[0:2 * self.M:2] = [Real(0, self.M) for _ in range(self.M)]
-        self.types[1:2 * self.M:2] = [Binary(self.F) for _ in range(self.M)]
-        self.types[2 * self.M:] = [Real(0, 1) for _ in range(sum(self.Bfs))]
+        self.crb_l = 2 * self.M
+        self.gran_l = self.F
+        self.cdb_l = self.gran_l * self.TFmax
+
+        # Creation of the problem and assignment of the types
+        #      CRB: rule part
+        #      Granularities: number of fuzzy sets
+        #      CDB: database part
+        super(RCSProblem, self).__init__( self.crb_l + self.gran_l + self.cdb_l, len(objectives))
+        self.types[0:self.crb_l:2] = [Real(0, self.M) for _ in range(self.M)]
+        self.types[1:self.crb_l:2] = [Binary(self.F) for _ in range(self.M)]
+        self.types[self.crb_l:self.crb_l + self.gran_l] = [Real(2, self.TFmax) for _ in range(self.F)]
+        self.types[self.crb_l + self.gran_l:] = [Real(0, 1) for _ in range(self.cdb_l)]
 
         # Maximize objectives by minimizing opposite
         self.directions[:] = [Problem.MINIMIZE for _ in range(len(objectives))]
@@ -305,13 +333,14 @@ class RCSProblem(Problem):
         self.train_y = train_y
 
     def decode(self, solution):
-        crb = solution.variables[:2 * self.M]
-        cdb = solution.variables[2 * self.M:]
+        crb = solution.variables[:self.crb_l]
+        G = solution.variables[self.crb_l:self.crb_l + self.gran_l]
+        cdb = solution.variables[self.crb_l + self.gran_l:]
         rules = []
         partitions = []
         for j in range(self.F):
-            base = sum(self.Bfs[:j])
-            full_bfs = np.array([0.0] + cdb[base: base + self.Bfs[j]] + [1.0])
+            base = j * self.TFmax
+            full_bfs = np.array(cdb[base: base + self.G[j]])
             partitions.append(full_bfs)
         for i in range(self.M):
             km = crb[2 * i]
@@ -332,7 +361,6 @@ class RCSProblem(Problem):
                 if len(A) > 0:
                     rule = ClassificationRule(antecedent=A, fuzzyset=fuzzyset, consequent=self.J[km - 1, -1])
                     rules.append(rule)
-
         classifier = FuzzyRuleBasedClassifier(rules, partitions)
         if (self.train_x is not None) and (self.train_y is not None):
             classifier.compute_weights(self.train_x, self.train_y)
@@ -355,8 +383,14 @@ class RCSProblem(Problem):
 
 
     def _generate_random_rules(self, solution):
+        """
+        It picks random rules from the initial RB
+        @param solution: chromosome to modify
+        @return:
+        """
         # Choose rules
         n_rules = random.randint(max(self.Mmin, int(self.M * 0.5)), self.M)
+
         rules = np.zeros([self.M], dtype=int)
         indexes = []
         chosen = np.zeros([n_rules], dtype=int)
@@ -372,6 +406,7 @@ class RCSProblem(Problem):
                 indexes += ind
 
         chosen[n_classes:] = random.sample(indexes, k=n_rules - n_classes)
+
         rules[:n_rules] = np.sort(chosen)
         solution.variables[:2 * self.M:2] = rules
 
@@ -382,12 +417,25 @@ class RCSProblem(Problem):
             for index in ant_indexes:
                 antecedents[index] = False
             solution.variables[2 * i + 1] = antecedents
+
         return solution
 
     def _generate_random_fuzzysets(self, solution):
+        """
+        It generates granularities and fuzzy set partitions
+
+        @param solution: chromosome to modify
+        @return:
+        """
         for i in range(self.F):
-            for j in range(self.Bfs[i]):
-                solution.variables[2 * self.M + (sum(self.Bfs[:i]) + j)] = self.initialBfs[i][j + 1]
+            solution.variables[self.crb_l + i] = self.G[i]
+            for j in range(self.TFmax):
+                if j < self.G[i]:
+                    value = self.initialBfs[i][j]
+                else:
+                    value = 0.0
+                solution.variables[self.crb_l + self.gran_l + (i * self.TFmax) + j] = value
+        return solution
 
     def random(self):
         solution = Solution(self)
@@ -396,7 +444,7 @@ class RCSProblem(Problem):
         return solution
 
     def check_solution(self, solution):
-        crb = np.array(solution.variables[:2 * self.M])
+        crb = np.array(solution.variables[:self.crb_l])
         for i in range(self.M):
             if crb[2 * i] != 0:
                 n_antecedents = np.sum(np.logical_and([v != 0 for v in self.J[i, :-1]], crb[2 * i + 1]))

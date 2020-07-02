@@ -37,43 +37,44 @@ def make_directory(path):
         os.makedirs(path)
 
 
-def test_fit(dataset, alg, seed):
+def test_fit(dataset, alg, seed, nEvals=50000, store=True):
     path = 'results/' + dataset + '/' + alg + '/'
     make_directory(path)
     set_rng(seed)
     X, y, attributes, inputs, outputs = load_dataset(dataset)
     X_n, y_n = normalize(X, y, attributes)
 
-    Xtr, Xte, ytr, yte = train_test_split(X_n, y_n, test_size=0.3)
+    Xtr, Xte, ytr, yte = train_test_split(X_n, y_n, test_size=0.3, random_state=seed)
 
     Amin = 1
-    M = 100
-    capacity = 64
+    M = 50
+    capacity = 32
     divisions = 8
     variator = RCSVariator()
-    discretizer = fuzzyDiscretization(numSet=5)
+    discretizer = fuzzyDiscretization(numSet=5, method='uniform')
     initializer = RCSInitializer(discretizer=discretizer)
-    base = path + 'moefs_' + str(seed)
-    if not is_object_present(base):
+    if store:
+        base = path + 'moefs_' + str(seed)
+        if not is_object_present(base):
+            mpaes_rcs_fdt = MPAES_RCS(M=M, Amin=Amin, capacity=capacity,
+                                      divisions=divisions, variator=variator,
+                                      initializer=initializer, moea_type=alg,
+                                      objectives=['accuracy', 'trl'])
+            mpaes_rcs_fdt.fit(Xtr, ytr, max_evals=nEvals)
+            store_object(mpaes_rcs_fdt, base)
+        else:
+            mpaes_rcs_fdt = load_object(base)
+    else:
         mpaes_rcs_fdt = MPAES_RCS(M=M, Amin=Amin, capacity=capacity,
                                   divisions=divisions, variator=variator,
                                   initializer=initializer, moea_type=alg,
                                   objectives=['accuracy', 'trl'])
-        mpaes_rcs_fdt.fit(Xtr, ytr, max_evals=1000)
-        store_object(mpaes_rcs_fdt, base)
-    else:
-        mpaes_rcs_fdt = load_object(base)
-
-    # mpaes_rcs_fdt.show_pareto(Xtr, ytr)
-    # mpaes_rcs_fdt.show_pareto(Xte, yte)
-    # mpaes_rcs_fdt.show_pareto(Xtr, ytr, path=base + '_pareto_train')
-    # mpaes_rcs_fdt.show_pareto(Xte, yte, path=base + '_pareto_test')
-    # mpaes_rcs_fdt.show_pareto_archives(Xtr, ytr, path=base + '_paretoArch_train')
-    # mpaes_rcs_fdt.show_pareto_archives(Xte, yte, path=base + '_paretoArch_test')
-    # mpaes_rcs_fdt.show_model('median', inputs, outputs)
+        mpaes_rcs_fdt.fit(Xtr, ytr, max_evals=nEvals)
 
 
-def test_crossval(dataset, alg, seed):
+    mpaes_rcs_fdt.show_pareto(Xte, yte)
+
+def test_crossval(dataset, alg, seed, nEvals=50000):
     path = 'results/' + dataset + '/' + alg + '/'
     make_directory(path)
     set_rng(seed)
@@ -89,8 +90,8 @@ def test_crossval(dataset, alg, seed):
     initializer = RCSInitializer(discretizer=discretizer)
     mpaes_rcs_fdt = MPAES_RCS(M=M, Amin=Amin, capacity=capacity,
                               divisions=divisions, variator=variator, initializer=initializer)
-    return mpaes_rcs_fdt.cross_val_score(X, y, num_fold=5, seed=seed,
-                                         filename=path + str(seed))
+    return mpaes_rcs_fdt.cross_val_score(X, y, nEvals=nEvals, num_fold=5, seed=seed,
+                                         storePath=path + str(seed))
 
 
 def test_multiple():
@@ -159,5 +160,7 @@ def parse_results():
 
 if __name__ == "__main__":
     freeze_support()
-    test_multiple()
-    parse_results()
+    #test_multiple()
+    #parse_results()
+    #test_crossval('appendicitis', 'moead', 1, nEvals=1000)
+    test_fit('iris', 'mpaes22', 2, nEvals=2000, store=False)

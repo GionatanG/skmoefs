@@ -3,7 +3,7 @@ import numpy as np
 
 class fuzzyDiscretization():
     
-    def __init__(self, numSet = 7, method='equifreq'):
+    def __init__(self, numSet = 7, method='uniform'):
         
         assert method in ['equifreq', 'uniform']
         self.method = method

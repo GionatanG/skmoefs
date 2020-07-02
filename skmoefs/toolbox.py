@@ -152,6 +152,7 @@ class MPAES_RCS(MOEL_FRBC):
         self.initializer.fit_tree(X, y)
         J = self.initializer.get_rules()
         splits = self.initializer.get_splits()
+
         # Find initial set of rules and fuzzy partitions
         # MOEFS problem
         self.problem = RCSProblem(self.Amin, self.M, J, splits, self.objectives)
@@ -185,6 +186,7 @@ class MPAES_RCS(MOEL_FRBC):
 
         self._initialize(X, y)
 
+
         self._choose_algorithm()
         self.algorithm.run(condition=max_evals)
 
@@ -196,6 +198,7 @@ class MPAES_RCS(MOEL_FRBC):
             solutions = copy.deepcopy(self.algorithm.population)
         for solution in solutions:
             self.archive.append(solution)
+
         self._sort_archive()
         self.classifiers = [self.problem.decode(solution) for solution in self.archive]
         return self
@@ -205,17 +208,16 @@ class MPAES_RCS(MOEL_FRBC):
             It sorts the archive according to the first objective (typically accuracy/auc)
             from the best to the worst
         """
-        isReversed = False
         if self.problem.directions[0] == Problem.MAXIMIZE:
-            isReversed = True
-        values = [sol.objectives[0] for sol in self.archive]
-        indexes = sorted(values, key=lambda k: values[k], reverse=isReversed)
+            indexes = np.argsort([sol.objectives[0] for sol in self.archive])[::-1]
+        else:
+            indexes = np.argsort([sol.objectives[0] for sol in self.archive])
         sorted_archive = []
         for i in range(len(indexes)):
             sorted_archive.append(self.archive[indexes[i]])
         self.archive = sorted_archive
 
-    def cross_val_score(self, X, y, num_fold=5, seed=0, filename=''):
+    def cross_val_score(self, X, y, nEvals=50000, num_fold=5, seed=0, storePath=''):
         sols = ['first', 'median', 'last']
         stats = ['accTR', 'accTS', 'trl', 'nRules', 'precision', 'recall', 'fscore']
         n_sols = len(sols)
@@ -233,32 +235,34 @@ class MPAES_RCS(MOEL_FRBC):
             X_train, X_test = X[train_index], X[test_index]
             y_train, y_test = y[train_index], y[test_index]
 
-            # Store fold data if not already present, 
-            if not is_object_present(filename + 'data_fold' + str(i) + '_s' + str(seed)):
-                store_object((X_train, X_test, y_train, y_test), filename + 'data_fold' + str(i) + '_s' + str(seed))
+            # Store fold data if not already present
+            if storePath != '':
+                if not is_object_present(storePath + 'data_fold' + str(i) + '_s' + str(seed)):
+                    store_object((X_train, X_test, y_train, y_test), storePath + 'data_fold' + str(i) + '_s' + str(seed))
+                else:
+                    X_train, X_test, y_train, y_test = load_object(storePath + 'data_fold' + str(i) + '_s' + str(seed))
+                # Train the MOEFS
+                if not is_object_present(storePath + '_fold' + str(i) + '_s' + str(seed)):
+                    my_fold = self.fit(X_train, y_train, nEvals)
+                    store_object(self, storePath + '_fold' + str(i) + '_s' + str(seed))
+                else:
+                    my_fold = load_object(storePath + '_fold' + str(i) + '_s' + str(seed))
             else:
-                X_train, X_test, y_train, y_test = load_object(filename + 'data_fold' + str(i) + '_s' + str(seed))
-
-            # Train the MOEFS
-            if not is_object_present(filename + '_fold' + str(i) + '_s' + str(seed)):
-                my_fold = self.fit(X_train, y_train, 50000)
-                store_object(self, filename + '_fold' + str(i) + '_s' + str(seed))
-            else:
-                my_fold = load_object(filename + '_fold' + str(i) + '_s' + str(seed))
+                my_fold = self.fit(X_train, y_train, nEvals)
 
             classifiers = my_fold.classifiers
             indexes = [0, int(len(classifiers) / 2), -1]
             snapshots = my_fold.algorithm.snapshots
             for j in range(len(snapshots)):
-                print(milestones[j])
                 snapshot = snapshots[j]
                 archive_ind = [0, int(len(snapshot) / 2), -1]
                 res = sorted(range(len(snapshot)), key=lambda q: snapshot[q].objectives[0])
                 for k in range(n_sols):
                     solution = snapshot[res[archive_ind[k]]]
                     classifier = my_fold.problem.decode(solution)
+                    y_train_pred = classifier.predict(X_train)
                     y_test_pred = classifier.predict(X_test)
-                    scores_archives[j, 0, k, i] = (solution.objectives[0]) * 100.0
+                    scores_archives[j, 0, k, i] = (sum(y_train_pred == y_train) / len(y_train)) * 100.0
                     scores_archives[j, 1, k, i] = (sum(y_test_pred == y_test) / len(y_test)) * 100.0
                     scores_archives[j, 2, k, i] = classifier.trl()
                     scores_archives[j, 3, k, i] = classifier.num_rules()
@@ -337,13 +341,14 @@ class MPAES_RCS(MOEL_FRBC):
         plt.legend(loc='best')
         plt.xlabel(objectives[1])
         plt.ylabel(objectives[0])
+        plt.ylim([0, 100])
         plt.xlim(left=0)
         # Show the plot
         plt.show()
         if path != '':
             plt.savefig(path + '_pareto.svg')
 
-    def show_pareto_archives(self, x, y, path=''):
+    def show_pareto_archives(self, x=None, y=None, path=''):
         set_default_plot_style()
 
         fig = plt.figure()
@@ -357,6 +362,7 @@ class MPAES_RCS(MOEL_FRBC):
         plt.xlabel(objectives[1])
         plt.ylabel(objectives[0])
         plt.xlim(left=0)
+        plt.ylim([0, 100])
         # Show the plot
         plt.show()
         if path != '':

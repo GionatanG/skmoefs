@@ -129,5 +129,5 @@ dmypy.json
 .pyre/
 
 # Result directories and analytics
-skmoefs/results/*
+skmoefs/results*/*
 skmoefs/csv/*.csv

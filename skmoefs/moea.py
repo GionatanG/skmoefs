@@ -1,13 +1,13 @@
 from __future__ import print_function
 
-import random
-import numpy as np
 import copy
+import random
 
+import numpy as np
 from platypus import AbstractGeneticAlgorithm, ParetoDominance, \
     AdaptiveGridArchive, Generator, Selector, NSGAII, NSGAIII, GDE3, SPEA2, IBEA, MOEAD, EpsMOEA
-from skmoefs.rcs import RCSVariator
 
+from skmoefs.rcs import RCSVariator
 
 milestones = [500, 1000, 2000, 5000, 10000, 20000, 30000, 40000, 50000, 75000, 100000]
 
@@ -22,6 +22,7 @@ class MOEAGenerator(Generator):
     def generate(self, problem):
         self.counter += 1
         solution = problem.random()
+
         return solution
 
 class RandomSelector(Selector):
@@ -58,6 +59,7 @@ class MPAES2_2(AbstractGeneticAlgorithm):
         """
 
         super(MPAES2_2, self).__init__(problem, population_size=2, generator=generator, **kwargs)
+
         self.variator = variator
         self.dominance = ParetoDominance()
         self.archive = AdaptiveGridArchive(capacity, problem.nobjs, divisions)
@@ -126,6 +128,7 @@ class NSGAIIS(NSGAII):
     def initialize(self):
         self.snapshots = []
         super(NSGAIIS, self).initialize()
+
 
     def iterate(self):
         if (self.nfe % 100) == 0:

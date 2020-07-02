@@ -1,14 +1,23 @@
 from __future__ import print_function
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from numba import jit
-from sklearn.preprocessing import LabelBinarizer
 from sklearn.metrics import roc_auc_score
+from sklearn.preprocessing import LabelBinarizer
+
 
 class ClassificationRule():
 
     def __init__(self, antecedent, fuzzyset, consequent, weight=1.0, label=None):
+        """
+
+        @param antecedent: antecedents in the rule. For each one [a, b, c] that represents the triangular fuzzyset
+        @param fuzzyset:
+        @param consequent:
+        @param weight:
+        @param label:
+        """
         self.antecedent = antecedent
         self.fuzzyset = fuzzyset
         self.consequent = consequent
@@ -20,8 +29,8 @@ class ClassificationRule():
             self.label = id(self)
 
 @jit(nopython=True)
-def membership_value(mf, value):
-    if len(mf) == 3:
+def membership_value(mf, value, type='triangular'):
+    if type=='triangular' and len(mf) == 3:
         if mf[0] == mf[1]: # left triangular
             if value < mf[0]:
                 return 1.0
@@ -57,19 +66,24 @@ def predict_fast(x, ant_matrix, cons_vect, weights, part_matrix):
     :param part_matrix: partitions of fuzzysets
     :return:
     """
-    y = np.zeros(x.shape[0])
-    for i in range(y.shape[0]):
+    sample_size = x.shape[0]
+    y = np.zeros(sample_size)
+    # For each sample
+    for i in range(sample_size):
         best_match_index = 0
-        best_match = 0
-        for j in range(cons_vect.shape[0]):
+        best_match = 0.0
+        # For each rule
+        for j in range(ant_matrix.shape[0]):
             matching_degree = 1.0
             for k in range(ant_matrix.shape[1]):
                 if not np.isnan(ant_matrix[j][k]):
-                    ant = part_matrix[k][ant_matrix[j][k]:ant_matrix[j][k]+3]
+                    base = int(ant_matrix[j][k])
+                    ant = part_matrix[k][base:base+3]
                     m_degree = membership_value(ant, x[i][k])
                     matching_degree *= m_degree
-            if weights[j] * matching_degree > best_match:
+            if (weights[j] * matching_degree) > best_match:
                 best_match_index = j
+                best_match = weights[j] * matching_degree
         y[i] = cons_vect[best_match_index]
     return y
 
@@ -86,14 +100,16 @@ def compute_weights_fast(train_x, train_y, ant_matrix, cons_vect, part_matrix):
             training set
     """
     weights = np.ones(ant_matrix.shape[0])
+    # For each rule
     for i in range(ant_matrix.shape[0]):
         matching = 0.0
         total = 0.0
         for j in range(train_y.shape[0]):
             matching_degree = 1.0
             for k in range(ant_matrix.shape[1]):
-                if not np.isnan(ant_matrix[j][k]):
-                    ant = part_matrix[k][ant_matrix[i][k]:ant_matrix[i][k] + 3]
+                if not np.isnan(ant_matrix[i][k]):
+                    index = int(ant_matrix[i][k])
+                    ant = part_matrix[k][index:index+3]
                     m_degree = membership_value(ant, train_x[j][k])
                     matching_degree *= m_degree
             if train_y[j] == cons_vect[i]:
@@ -121,12 +137,16 @@ class FuzzyRuleBasedClassifier():
         self.partitions = partitions
 
         # RB and DB information are converted into NumPy matrices
-        self.ant_matrix = np.empty((len(rules), len(partitions)))
-        self.ant_matrix[:] = np.NaN
+        self.ant_matrix = np.full((len(rules), len(partitions)), np.nan)
         self.cons_vect = np.empty((len(rules)))
         self.weights = np.ones((len(rules)))
-        self.part_matrix = np.asmatrix(partitions)
-        self.part_matrix = np.hstack((self.part_matrix[:, 0], self.part_matrix[:], self.part_matrix[:, -1]))
+        self.granularities = np.array([len(partition) for partition in partitions], dtype=np.int)
+        self.part_matrix = np.zeros([len(self.granularities), 2 + max(self.granularities)])
+        for i in range(len(self.granularities)):
+            self.part_matrix[i][0] = partitions[i][0]
+            for j in range(self.granularities[i] ):
+                self.part_matrix[i][j+1] = partitions[i][j]
+            self.part_matrix[i][self.granularities[i]+1] = partitions[i][-1]
         for i, rule in enumerate(self.rules):
             for key in rule.antecedent:
                 self.ant_matrix[i, key] = rule.fuzzyset[key] - 1
